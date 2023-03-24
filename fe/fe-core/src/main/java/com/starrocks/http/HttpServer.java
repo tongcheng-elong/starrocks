@@ -181,6 +181,9 @@ public class HttpServer {
         TableSchemaAction.registerAction(controller);
         TableQueryPlanAction.registerAction(controller);
 
+        //sqlparser util
+        SqlParserAction.registerAction(controller);
+
         BootstrapFinishAction.registerAction(controller);
     }
 
