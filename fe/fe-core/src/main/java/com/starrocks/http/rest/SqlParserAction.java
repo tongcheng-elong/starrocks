@@ -1,13 +1,36 @@
 package com.starrocks.http.rest;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.starrocks.analysis.*;
+import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.FunctionCallExpr;
+import com.starrocks.analysis.Subquery;
 import com.starrocks.common.DdlException;
-import com.starrocks.http.*;
-import com.starrocks.qe.SessionVariable;
-import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.sql.ast.*;
+import com.starrocks.http.ActionController;
+import com.starrocks.http.BaseRequest;
+import com.starrocks.http.BaseResponse;
+import com.starrocks.http.IllegalArgException;
+import com.starrocks.sql.ast.TableRelation;
+import com.starrocks.sql.ast.CTERelation;
+import com.starrocks.sql.ast.QueryStatement;
+import com.starrocks.sql.ast.Relation;
+import com.starrocks.sql.ast.SelectRelation;
+import com.starrocks.sql.ast.SubqueryRelation;
+import com.starrocks.sql.ast.JoinRelation;
+import com.starrocks.sql.ast.UnionRelation;
+import com.starrocks.sql.ast.QueryRelation;
+import com.starrocks.sql.ast.ValuesRelation;
+import com.starrocks.sql.ast.StatementBase;
+import com.starrocks.sql.ast.LoadStmt;
+import com.starrocks.sql.ast.DataDescription;
+import com.starrocks.sql.ast.InsertStmt;
+import com.starrocks.sql.ast.TruncateTableStmt;
+import com.starrocks.sql.ast.DeleteStmt;
+import com.starrocks.sql.ast.UpdateStmt;
+import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.sql.ast.DropTableStmt;
+import com.starrocks.sql.ast.AlterTableStmt;
+import com.starrocks.sql.ast.CreateTableAsSelectStmt;
+import com.starrocks.sql.ast.SelectListItem;
 import com.starrocks.sql.parser.SqlParser;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
@@ -16,9 +39,13 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.json.JSONObject;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * @Description TODO
@@ -202,26 +229,6 @@ public class SqlParserAction extends RestBaseAction {
             for (String from : getQuery(((CreateTableAsSelectStmt) st).getQueryStatement().getQueryRelation())) {
                 list.add(new Rel(from, to, "CREATE"));
             }
-        } else if (st instanceof EmptyStmt) {
-            //不做解析
-        } else if (st instanceof SetStmt) {
-            //不做解析
-        } else if (st instanceof CreateViewStmt) {
-            //不做解析
-        } else if (st instanceof ShowTableStmt) {
-
-        } else if (st instanceof ShowWarningStmt) {
-
-        } else if (st instanceof UseDbStmt) {
-
-        } else if (st instanceof ShowDataStmt) {
-
-        } else if (st instanceof ShowVariablesStmt) {
-
-        } else if (st instanceof ShowCollationStmt) {
-
-        } else if (st instanceof ShowLoadStmt) {
-
         } else {
             throw new RuntimeException(st.getClass() + "");
         }
@@ -254,7 +261,7 @@ public class SqlParserAction extends RestBaseAction {
                 getQuery(cteRelation.getCteQueryStatement().getQueryRelation(), l, map);
                 m.put(name, l);
             }
-//                                    解析item中可能的function
+            // 解析item中可能的function
             for (SelectListItem item : ((SelectRelation) r).getSelectList().getItems()) {
                 expr(item.getExpr(), res, map);
             }
