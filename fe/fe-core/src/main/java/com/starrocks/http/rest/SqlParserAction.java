@@ -23,7 +23,7 @@ import java.util.*;
 /**
  * @Description TODO
  * @Auther tao.zhou
- * @Date 2023-3-22 19:14
+ * @Date 2023-3-22   19:14
  * @Version 1.0
  */
 public class SqlParserAction extends RestBaseAction {
@@ -78,7 +78,7 @@ public class SqlParserAction extends RestBaseAction {
     }
 
     private void sendErrorResult(RestResult result, BaseRequest request, BaseResponse response) {
-        result.addResultEntry("error", "sql param is null, please set valid param!");
+        result.addResultEntry("error", "sql   param   is   null,   please   set   valid   param!");
         response.appendContent(result.toJson());
         writeResponse(request, response, HttpResponseStatus.BAD_REQUEST);
     }
@@ -173,6 +173,8 @@ public class SqlParserAction extends RestBaseAction {
             for (String from : getQuery(((InsertStmt) st).getQueryStatement().getQueryRelation())) {
                 list.add(new Rel(from, to, "INSERT"));
             }
+
+
         } else if (st instanceof QueryStatement) {
             for (String from : getQuery(((QueryStatement) st).getQueryRelation())) {
                 list.add(new Rel(from, null, null));
@@ -206,6 +208,20 @@ public class SqlParserAction extends RestBaseAction {
             //不做解析
         } else if (st instanceof CreateViewStmt) {
             //不做解析
+        } else if (st instanceof ShowTableStmt) {
+
+        } else if (st instanceof ShowWarningStmt) {
+
+        } else if (st instanceof UseDbStmt) {
+
+        } else if (st instanceof ShowDataStmt) {
+
+        } else if (st instanceof ShowVariablesStmt) {
+
+        } else if (st instanceof ShowCollationStmt) {
+
+        } else if (st instanceof ShowLoadStmt) {
+
         } else {
             throw new RuntimeException(st.getClass() + "");
         }
@@ -223,7 +239,7 @@ public class SqlParserAction extends RestBaseAction {
     /**
      * @param r   需要分析的relation
      * @param res 将解析出来的查询放入res中
-     * @param map map用于解析  WITH  `T-60`  AS  (select  *  from  t1  left  join  t2)    做一个  T-60  和  t1,t2的映射
+     * @param map map用于解析   WITH   `T-60`   AS   (select   *   from   t1   left   join   t2)      做一个   T-60   和   t1,t2的映射
      */
     private static void getQuery(Relation r, Set<String> res, Map<String, Set<String>> map) {
         if (r == null) {
@@ -238,6 +254,10 @@ public class SqlParserAction extends RestBaseAction {
                 getQuery(cteRelation.getCteQueryStatement().getQueryRelation(), l, map);
                 m.put(name, l);
             }
+//                                    解析item中可能的function
+            for (SelectListItem item : ((SelectRelation) r).getSelectList().getItems()) {
+                expr(item.getExpr(), res, map);
+            }
             getQuery(((SelectRelation) r).getRelation(), res, m);
         } else if (r instanceof TableRelation) {
             if (map.containsKey(r.toString())) {
@@ -250,6 +270,10 @@ public class SqlParserAction extends RestBaseAction {
         } else if (r instanceof JoinRelation) {
             getQuery(((JoinRelation) r).getLeft(), res, map);
             getQuery(((JoinRelation) r).getRight(), res, map);
+        } else if (r instanceof UnionRelation) {
+            for (QueryRelation un : ((UnionRelation) r).getRelations()) {
+                getQuery(un, res, map);
+            }
         } else if (r instanceof ValuesRelation) {
             //不做解析
         } else {
@@ -257,5 +281,17 @@ public class SqlParserAction extends RestBaseAction {
         }
     }
 
+    private static void expr(Expr expr, Set<String> res, Map<String, Set<String>> map) {
+        if (expr instanceof Subquery) {
+            getQuery(((Subquery) expr).getQueryStatement().getQueryRelation(), res, map);
+        } else if (expr instanceof FunctionCallExpr) {
+            for (Expr child : expr.getChildren()) {
+                expr(child, res, map);
+            }
+        }
+    }
+
 
 }
+
+
