@@ -1,3 +1,5 @@
+// This file is licensed under the Elastic License 2.0. Copyright 2021-present, StarRocks Inc.
+
 package com.starrocks.http.rest;
 
 import com.google.gson.Gson;
@@ -9,43 +11,51 @@ import com.starrocks.http.ActionController;
 import com.starrocks.http.BaseRequest;
 import com.starrocks.http.BaseResponse;
 import com.starrocks.http.IllegalArgException;
-import com.starrocks.sql.ast.TableRelation;
+import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.CTERelation;
+import com.starrocks.sql.ast.CreateTableAsSelectStmt;
+import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.sql.ast.CreateViewStmt;
+import com.starrocks.sql.ast.DataDescription;
+import com.starrocks.sql.ast.DeleteStmt;
+import com.starrocks.sql.ast.DropTableStmt;
+import com.starrocks.sql.ast.EmptyStmt;
+import com.starrocks.sql.ast.InsertStmt;
+import com.starrocks.sql.ast.JoinRelation;
+import com.starrocks.sql.ast.LoadStmt;
+import com.starrocks.sql.ast.QueryRelation;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.Relation;
-import com.starrocks.sql.ast.SelectRelation;
-import com.starrocks.sql.ast.SubqueryRelation;
-import com.starrocks.sql.ast.JoinRelation;
-import com.starrocks.sql.ast.UnionRelation;
-import com.starrocks.sql.ast.QueryRelation;
-import com.starrocks.sql.ast.ValuesRelation;
-import com.starrocks.sql.ast.StatementBase;
-import com.starrocks.sql.ast.LoadStmt;
-import com.starrocks.sql.ast.DataDescription;
-import com.starrocks.sql.ast.InsertStmt;
-import com.starrocks.sql.ast.TruncateTableStmt;
-import com.starrocks.sql.ast.DeleteStmt;
-import com.starrocks.sql.ast.UpdateStmt;
-import com.starrocks.sql.ast.CreateTableStmt;
-import com.starrocks.sql.ast.DropTableStmt;
-import com.starrocks.sql.ast.AlterTableStmt;
-import com.starrocks.sql.ast.CreateTableAsSelectStmt;
 import com.starrocks.sql.ast.SelectListItem;
+import com.starrocks.sql.ast.SelectRelation;
+import com.starrocks.sql.ast.SetStmt;
+import com.starrocks.sql.ast.ShowCollationStmt;
+import com.starrocks.sql.ast.ShowDataStmt;
+import com.starrocks.sql.ast.ShowLoadStmt;
+import com.starrocks.sql.ast.ShowTableStmt;
+import com.starrocks.sql.ast.ShowVariablesStmt;
+import com.starrocks.sql.ast.ShowWarningStmt;
+import com.starrocks.sql.ast.StatementBase;
+import com.starrocks.sql.ast.SubqueryRelation;
+import com.starrocks.sql.ast.TableRelation;
+import com.starrocks.sql.ast.TruncateTableStmt;
+import com.starrocks.sql.ast.UnionRelation;
+import com.starrocks.sql.ast.UpdateStmt;
+import com.starrocks.sql.ast.UseDbStmt;
+import com.starrocks.sql.ast.ValuesRelation;
 import com.starrocks.sql.parser.SqlParser;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.List;
-import java.util.Set;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * @Description TODO
@@ -60,6 +70,23 @@ public class SqlParserAction extends RestBaseAction {
 
     public SqlParserAction(ActionController controller) {
         super(controller);
+    }
+
+    static Set<Class<? extends StatementBase>> statementSkip = new HashSet<>();
+    static Set<Class<? extends Relation>> relationSkip = new HashSet<>();
+
+    static {
+        statementSkip.add(EmptyStmt.class);
+        statementSkip.add(SetStmt.class);
+        statementSkip.add(CreateViewStmt.class);
+        statementSkip.add(ShowTableStmt.class);
+        statementSkip.add(ShowWarningStmt.class);
+        statementSkip.add(UseDbStmt.class);
+        statementSkip.add(ShowDataStmt.class);
+        statementSkip.add(ShowVariablesStmt.class);
+        statementSkip.add(ShowCollationStmt.class);
+        statementSkip.add(ShowLoadStmt.class);
+        relationSkip.add(ValuesRelation.class);
     }
 
     public static void registerAction(ActionController controller)
@@ -229,7 +256,7 @@ public class SqlParserAction extends RestBaseAction {
             for (String from : getQuery(((CreateTableAsSelectStmt) st).getQueryStatement().getQueryRelation())) {
                 list.add(new Rel(from, to, "CREATE"));
             }
-        } else {
+        } else if (st != null && !statementSkip.contains(st.getClass())) {
             throw new RuntimeException(st.getClass() + "");
         }
         return list;
@@ -281,9 +308,7 @@ public class SqlParserAction extends RestBaseAction {
             for (QueryRelation un : ((UnionRelation) r).getRelations()) {
                 getQuery(un, res, map);
             }
-        } else if (r instanceof ValuesRelation) {
-            //不做解析
-        } else {
+        } else if (!relationSkip.contains(r.getClass())) {
             throw new RuntimeException(r.getClass() + "");
         }
     }
