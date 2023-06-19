@@ -3,6 +3,7 @@
 package com.starrocks.http.rest;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.FunctionCallExpr;
 import com.starrocks.analysis.Subquery;
@@ -11,6 +12,7 @@ import com.starrocks.http.ActionController;
 import com.starrocks.http.BaseRequest;
 import com.starrocks.http.BaseResponse;
 import com.starrocks.http.IllegalArgException;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.CTERelation;
 import com.starrocks.sql.ast.CreateTableAsSelectStmt;
@@ -55,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -112,15 +115,63 @@ public class SqlParserAction extends RestBaseAction {
         if (StringUtils.isEmpty(orgSql)) {
             sendErrorResult(result, request, response);
         } else {
-            final RelationResponse parse = getRels(orgSql);
-            result.addResultEntry("result", parse);
-            sendResult(request, response, result);
+            if (Objects.equals(sqlParameter.getType(), 1)) {
+                SessionVariable sessionVariable = new SessionVariable();
+                sessionVariable.setSqlMode(32);
+                final List<StatementBase> parse = SqlParser.parse(orgSql, sessionVariable);
+                final CreateTableStmt parseResult = (CreateTableStmt) parse.get(0);
+                result.addResultEntry("result", generateObj(parseResult));
+                sendResult(request, response, result);
+                return;
+            } else if (Objects.equals(sqlParameter.getType(), 0)) {
+                final RelationResponse parse = getRels(orgSql);
+                result.addResultEntry("result", parse);
+                sendResult(request, response, result);
+            } else {
+                sendErrorResult(result, request, response);
+            }
         }
     }
 
+    private JsonObject generateObj(CreateTableStmt parseResult) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("ifNotExist", parseResult.isSetIfNotExists());
+        obj.addProperty("isExternal", parseResult.isExternal());
+        JsonObject tableName = new JsonObject();
+        tableName.addProperty("tbl", parseResult.getTableName());
+        tableName.addProperty("db", parseResult.getDbName());
+        obj.add("tableName", tableName);
+        obj.add("columnsDefs", gson.toJsonTree(parseResult.getColumnDefs()));
+        obj.add("indexDefs", gson.toJsonTree(parseResult.getIndexDefs()));
+        JsonObject keysDesc = new JsonObject();
+        keysDesc.addProperty("type", parseResult.getKeysDesc().getKeysType().name());
+        keysDesc.add("keysColumnNames", gson.toJsonTree(parseResult.getKeysDesc().getKeysColumnNames()));
+        obj.add("keysDesc", keysDesc);
+        obj.add("partitionDesc", gson.toJsonTree(parseResult.getPartitionDesc()));
+        obj.add("distributionDesc", gson.toJsonTree(parseResult.getDistributionDesc()));
+        obj.add("properties", gson.toJsonTree(parseResult.getProperties()));
+        obj.addProperty("engineName", parseResult.getEngineName());
+        obj.addProperty("comment", parseResult.getComment());
+        obj.addProperty("originStmt", parseResult.getOrigStmt().originStmt);
+        return obj;
+    }
 
     static class SqlParameter {
+        /**
+         * 0：默认，返回RelationResponse
+         * 1：新增，返回StatementBase 单个
+         */
+        private int type;
+
         private String sql;
+
+        public int getType() {
+            return type;
+        }
+
+        public void setType(int type) {
+            this.type = type;
+        }
 
         public String getSql() {
             return sql;
