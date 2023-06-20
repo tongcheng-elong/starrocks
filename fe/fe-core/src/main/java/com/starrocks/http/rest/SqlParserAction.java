@@ -111,7 +111,7 @@ public class SqlParserAction extends RestBaseAction {
 
         final SqlParameter sqlParameter = gson.fromJson(content, SqlParameter.class);
         final String orgSql = sqlParameter.getSql();
-
+        LOG.info("start to parse sql {}", orgSql);
         if (StringUtils.isEmpty(orgSql)) {
             sendErrorResult(result, request, response);
         } else {
@@ -119,10 +119,22 @@ public class SqlParserAction extends RestBaseAction {
                 SessionVariable sessionVariable = new SessionVariable();
                 sessionVariable.setSqlMode(32);
                 final List<StatementBase> parse = SqlParser.parse(orgSql, sessionVariable);
-                final CreateTableStmt parseResult = (CreateTableStmt) parse.get(0);
-                result.addResultEntry("result", generateObj(parseResult));
+                List<JsonObject> resultList = new ArrayList<>();
+                for (int i = 0; i < parse.size(); i++) {
+                    StatementBase statementBase = parse.get(i);
+                    if (statementBase instanceof CreateTableStmt) {
+                        final CreateTableStmt parseResult = (CreateTableStmt) parse.get(0);
+                        final JsonObject jsonObject = generateCreateTableStmtObj(parseResult);
+                        jsonObject.addProperty("parseIndex", i);
+                        resultList.add(jsonObject);
+                    } else if (statementBase instanceof AlterTableStmt) {
+                        final JsonObject jsonObject = generateAlterTableStmt((AlterTableStmt) statementBase);
+                        jsonObject.addProperty("parseIndex", i);
+                        resultList.add(jsonObject);
+                    }
+                }
+                result.addResultEntry("result", resultList);
                 sendResult(request, response, result);
-                return;
             } else if (Objects.equals(sqlParameter.getType(), 0)) {
                 final RelationResponse parse = getRels(orgSql);
                 result.addResultEntry("result", parse);
@@ -133,7 +145,24 @@ public class SqlParserAction extends RestBaseAction {
         }
     }
 
-    private JsonObject generateObj(CreateTableStmt parseResult) {
+    /**
+     * 把alterTableStmt转换成json
+     *
+     * @param alterTableStmt
+     * @return
+     */
+    private JsonObject generateAlterTableStmt(AlterTableStmt alterTableStmt) {
+        JsonObject obj = new JsonObject();
+        JsonObject tableName = new JsonObject();
+        tableName.addProperty("tbl", alterTableStmt.getTbl().getTbl());
+        tableName.addProperty("db", alterTableStmt.getTbl().getDb());
+        obj.add("tableName", tableName);
+        obj.add("ops", gson.toJsonTree(alterTableStmt.getOps()));
+        obj.addProperty("originStmt", alterTableStmt.getOrigStmt().originStmt);
+        return obj;
+    }
+
+    private JsonObject generateCreateTableStmtObj(CreateTableStmt parseResult) {
         JsonObject obj = new JsonObject();
         obj.addProperty("ifNotExist", parseResult.isSetIfNotExists());
         obj.addProperty("isExternal", parseResult.isExternal());
