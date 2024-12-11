@@ -332,6 +332,7 @@ public class HiveMetastoreApiConverter {
         textFileParameters.putAll(sd.getSerdeInfo().getParameters());
         // "skip.header.line.count" is set in TBLPROPERTIES
         textFileParameters.putAll(params);
+        textFileParameters.put(HIVE_TABLE_SERDE_LIB, sd.getSerdeInfo().getSerializationLib());
         Partition.Builder partitionBuilder = Partition.builder()
                 .setParams(params)
                 .setFullPath(sd.getLocation())
